@@ -1,18 +1,16 @@
 // public/sw.js
-
-const CACHE_NAME = 'instagram-downloader-v2'; // Increment version if you make changes
+const CACHE_NAME = 'instagrab-v1'; // Changed cache name
 const urlsToCache = [
     '/',
     '/index.html',
     '/style.css',
     '/manifest.json',
-    // Add paths to your most important icons
     '/icons/icon-192x192.png',
     '/icons/icon-512x512.png'
-    // Add other critical assets if any
 ];
 
 self.addEventListener('install', event => {
+    console.log('Service Worker: Install event');
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then(cache => {
@@ -20,14 +18,14 @@ self.addEventListener('install', event => {
                 return cache.addAll(urlsToCache);
             })
             .catch(err => {
-                console.error('Service Worker: Cache addAll failed:', err);
+                console.error('Service Worker: Cache addAll failed during install:', err);
             })
     );
-    self.skipWaiting(); // Force the waiting service worker to become the active service worker
+    self.skipWaiting();
 });
 
 self.addEventListener('activate', event => {
-    console.log('Service Worker: Activating...');
+    console.log('Service Worker: Activate event');
     event.waitUntil(
         caches.keys().then(cacheNames => {
             return Promise.all(
@@ -38,33 +36,32 @@ self.addEventListener('activate', event => {
                     }
                 })
             );
+        }).then(() => {
+            console.log('Service Worker: Activated and old caches cleared.');
+            return self.clients.claim();
         })
     );
-    return self.clients.claim(); // Become available to all pages
 });
 
 self.addEventListener('fetch', event => {
-    // We only want to cache GET requests.
     if (event.request.method !== 'GET') {
         return;
     }
-
+    if (event.request.url.includes('/api/')) {
+        event.respondWith(fetch(event.request));
+        return;
+    }
     event.respondWith(
         caches.match(event.request)
             .then(cachedResponse => {
-                // Cache hit - return response
                 if (cachedResponse) {
                     return cachedResponse;
                 }
-
-                // Not in cache, fetch from network
                 return fetch(event.request).then(
                     networkResponse => {
-                        // Check if we received a valid response
                         if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
                             return networkResponse;
                         }
-
                         const responseToCache = networkResponse.clone();
                         caches.open(CACHE_NAME)
                             .then(cache => {
@@ -73,11 +70,8 @@ self.addEventListener('fetch', event => {
                         return networkResponse;
                     }
                 ).catch(error => {
-                    console.error('Service Worker: Fetch failed; returning offline fallback or error.', error);
-                    // Optionally, return a fallback offline page if network fails for HTML pages
-                    // if (event.request.mode === 'navigate') {
-                    //    return caches.match('/offline.html');
-                    // }
+                    console.error('Service Worker: Fetch failed; network error.', error);
+                    throw error;
                 });
             })
     );
