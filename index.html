@@ -3,26 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Instagram Downloader</title>
-    <meta name="theme-color" content="#007bff"/> <!-- Theme color for PWA -->
+    <title>InstaGrab - Media Downloader</title> <!-- Updated Title -->
+    <meta name="description" content="Download Instagram videos and images easily with InstaGrab. Paste the link and get your media instantly.">
+    <meta name="theme-color" content="#6a11cb"/> <!-- Updated theme color -->
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
-    <!-- iOS specific meta tags (optional) -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="IG Downloader">
-    <link rel="apple-touch-icon" href="icons/icon-192x192.png"> <!-- Example iOS icon -->
+    <meta name="apple-mobile-web-app-title" content="InstaGrab">
+    <link rel="apple-touch-icon" href="1747306537309.png">
+    <!-- Preconnect for Google Fonts for performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 </head>
 <body>
     <div class="container">
-        <h1>Instagram Downloader</h1>
-        <input type="text" id="instagramUrl" placeholder="Paste Instagram video or post link here">
-        <button id="nextButton">Next & Download</button>
-        <button id="installAppButton">Install App</button>
+        <h1>InstaGrab</h1> <!-- Updated App Name -->
+        <input type="text" id="instagramUrl" placeholder="Paste Instagram link here (video, image, reel)">
+        <button id="nextButton" class="button">
+            <!-- Optional: Add an SVG icon here if you want -->
+            <span>Download Media</span>
+        </button>
+        <button id="installAppButton" class="button">
+            <!-- Optional: Add an SVG icon here -->
+            <span>Install App</span>
+        </button>
         <div class="loader" id="loader"></div>
         <div id="status"></div>
         <div id="downloadInfo"></div>
     </div>
+
+    <footer class="footer">
+        <p>© 2024 InstaGrab. For educational purposes only.</p>
+        <!-- <p>Developed by <a href="#" target="_blank">Your Name/Brand</a></p> -->
+    </footer>
 
     <script>
         const instagramUrlInput = document.getElementById('instagramUrl');
@@ -32,114 +46,197 @@
         const loader = document.getElementById('loader');
         const downloadInfoDiv = document.getElementById('downloadInfo');
 
+        // Dynamically set --primary-color-rgb for CSS box-shadow transparency
+        function updatePrimaryColorRGB() {
+            const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim();
+            if (primaryColor.startsWith('#')) {
+                const hex = primaryColor.substring(1);
+                const r = parseInt(hex.substring(0, 2), 16);
+                const g = parseInt(hex.substring(2, 4), 16);
+                const b = parseInt(hex.substring(4, 6), 16);
+                document.documentElement.style.setProperty('--primary-color-rgb', `${r}, ${g}, ${b}`);
+            }
+        }
+        updatePrimaryColorRGB(); // Call on load
+
+
         let deferredPrompt;
 
         window.addEventListener('beforeinstallprompt', (e) => {
+            console.log('beforeinstallprompt event fired');
             e.preventDefault();
             deferredPrompt = e;
-            installAppButton.style.display = 'block';
-            console.log('`beforeinstallprompt` event fired.');
+            if (installAppButton) installAppButton.style.display = 'flex'; // Changed to flex for icon alignment
         });
 
-        installAppButton.addEventListener('click', async () => {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                const { outcome } = await deferredPrompt.userChoice;
-                console.log(`User response to install prompt: ${outcome}`);
-                if (outcome === 'accepted') {
-                    statusDiv.textContent = 'App installed successfully!';
-                    statusDiv.className = 'success';
+        if (installAppButton) {
+            installAppButton.addEventListener('click', async () => {
+                console.log('Install button clicked');
+                if (deferredPrompt) {
+                    installAppButton.disabled = true; // Disable button during prompt
+                    deferredPrompt.prompt();
+                    try {
+                        const { outcome } = await deferredPrompt.userChoice;
+                        console.log(`User response to install prompt: ${outcome}`);
+                        if (outcome === 'accepted') {
+                            if(statusDiv) {
+                                statusDiv.textContent = 'App installed successfully!';
+                                statusDiv.className = 'success';
+                            }
+                            installAppButton.style.display = 'none'; // Hide after successful install
+                        } else {
+                             if(statusDiv) {
+                                statusDiv.textContent = 'App installation dismissed.';
+                                statusDiv.className = '';
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error during install prompt:', error);
+                        if(statusDiv) {
+                            statusDiv.textContent = 'Installation failed.';
+                            statusDiv.className = 'error';
+                        }
+                    }
+                    deferredPrompt = null; // Prompt can only be used once
+                    installAppButton.disabled = false; // Re-enable if not hidden
+                    if(installAppButton.style.display !== 'none' && outcome !== 'accepted'){
+                         // Keep button visible if dismissed, unless hidden by other logic
+                    } else {
+                        installAppButton.style.display = 'none';
+                    }
                 } else {
-                    statusDiv.textContent = 'App installation dismissed.';
+                    if(statusDiv) {
+                        statusDiv.textContent = 'App install prompt not available. Already installed or browser does not meet criteria (e.g., HTTPS needed).';
+                        statusDiv.className = 'error';
+                    }
+                }
+            });
+        }
+
+
+        if (nextButton) {
+            nextButton.addEventListener('click', async () => {
+                console.log('Download Media button clicked');
+                const postUrl = instagramUrlInput.value.trim();
+                
+                if(statusDiv) {
+                    statusDiv.textContent = '';
                     statusDiv.className = '';
                 }
-                deferredPrompt = null;
-                installAppButton.style.display = 'none';
-            } else {
-                statusDiv.textContent = 'App install prompt not available. It might be already installed, or your browser/settings do not support it. This adds the website to your home screen, not an APK.';
-                statusDiv.className = 'error';
-            }
-        });
+                if(downloadInfoDiv) downloadInfoDiv.innerHTML = '';
+                if(loader) loader.style.display = 'none';
 
-        nextButton.addEventListener('click', async () => {
-            const postUrl = instagramUrlInput.value.trim();
-            statusDiv.textContent = '';
-            statusDiv.className = '';
-            downloadInfoDiv.innerHTML = '';
-            loader.style.display = 'none';
-
-            if (!postUrl) {
-                statusDiv.textContent = 'Please provide an Instagram link.';
-                statusDiv.className = 'error';
-                return;
-            }
-            if (!postUrl.includes('instagram.com/')) {
-                statusDiv.textContent = 'This is not a valid Instagram link.';
-                statusDiv.className = 'error';
-                return;
-            }
-
-            loader.style.display = 'block';
-            nextButton.disabled = true;
-            statusDiv.textContent = 'Processing link...';
-            statusDiv.className = '';
-
-            try {
-                const response = await fetch(`/api/fetch-instagram-media?url=${encodeURIComponent(postUrl)}`);
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({ message: `Server error: ${response.status}` }));
-                    throw new Error(errorData.message || `Server error: ${response.status}`);
-                }
-                const data = await response.json();
-
-                if (data.success && data.media_urls && data.media_urls.length > 0) {
-                    statusDiv.textContent = 'Media found! Starting download...';
-                    statusDiv.className = 'success';
-                    const firstMedia = data.media_urls[0];
-                    const a = document.createElement('a');
-                    a.href = firstMedia.url;
-                    let filename = "instagram_media";
-                    try {
-                        const urlPath = new URL(firstMedia.url).pathname;
-                        const parts = urlPath.split('/');
-                        filename = parts[parts.length - 1].split('?')[0] || filename;
-                        if (!filename.includes('.')) {
-                           if (firstMedia.type === 'video') filename += '.mp4';
-                           else if (firstMedia.type === 'image') filename += '.jpg';
-                        }
-                    } catch (e) { /* ignore */ }
-                    a.download = filename;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-
-                    if (firstMedia.type === 'image') {
-                        downloadInfoDiv.innerHTML = `<img src="${firstMedia.url}" alt="Downloaded Image Preview">`;
-                    } else if (firstMedia.type === 'video') {
-                        downloadInfoDiv.innerHTML = `<video controls src="${firstMedia.url}" width="100%"></video>`;
+                if (!postUrl) {
+                    if(statusDiv) {
+                        statusDiv.textContent = 'Please provide an Instagram link.';
+                        statusDiv.className = 'error';
                     }
-                    downloadInfoDiv.innerHTML += `<p><a href="${firstMedia.url}" target="_blank" download="${filename}" class="download-button">If download doesn't start, click here</a></p>`;
-                    statusDiv.textContent = `"${filename}" download has started. Check your browser's download folder.`;
-                    statusDiv.className = 'success';
-                } else {
-                    statusDiv.textContent = data.message || 'Media could not be found. It might be private or the link is incorrect.';
-                    statusDiv.className = 'error';
+                    return;
                 }
-            } catch (error) {
-                statusDiv.textContent = `An error occurred: ${error.message}`;
-                statusDiv.className = 'error';
-            } finally {
-                loader.style.display = 'none';
-                nextButton.disabled = false;
-            }
-        });
+                if (!postUrl.includes('instagram.com/')) {
+                    if(statusDiv) {
+                        statusDiv.textContent = 'This is not a valid Instagram link.';
+                        statusDiv.className = 'error';
+                    }
+                    return;
+                }
+
+                if(loader) loader.style.display = 'block';
+                nextButton.disabled = true;
+                if(statusDiv) {
+                    statusDiv.textContent = 'Processing link...';
+                    statusDiv.className = '';
+                }
+
+                try {
+                    const response = await fetch(`/api/fetch-instagram-media?url=${encodeURIComponent(postUrl)}`);
+                    const responseText = await response.text();
+
+                    if (!response.ok) {
+                        let errorMsg = `Server error: ${response.status}`;
+                        try {
+                            const errorData = JSON.parse(responseText);
+                            errorMsg = errorData.message || errorMsg;
+                        } catch (e) {
+                            errorMsg = `Server error (${response.status}). Could not parse error.`; 
+                        }
+                        console.error('Server error details:', errorMsg);
+                        throw new Error(errorMsg);
+                    }
+                    
+                    const data = JSON.parse(responseText);
+
+                    if (data.success && data.media_urls && data.media_urls.length > 0) {
+                        if(statusDiv) {
+                            statusDiv.textContent = 'Media found! Starting download...';
+                            statusDiv.className = 'success';
+                        }
+                        const firstMedia = data.media_urls[0];
+                        const a = document.createElement('a');
+                        a.href = firstMedia.url;
+                        let filename = "instagram_media";
+                        try {
+                            const urlObject = new URL(firstMedia.url);
+                            const pathnameParts = urlObject.pathname.split('/');
+                            const potentialFilename = pathnameParts[pathnameParts.length - 1].split('?')[0];
+                            if (potentialFilename) filename = potentialFilename;
+                            
+                            if (!filename.includes('.') || filename.length > 50) { // Basic extension check and length check
+                               filename = `instagram_media_${Date.now()}`; // Fallback filename
+                               if (firstMedia.type === 'video') filename += '.mp4';
+                               else if (firstMedia.type === 'image') filename += '.jpg';
+                            }
+                        } catch (e) { 
+                            console.warn("Could not parse filename from URL, using default.", e);
+                            filename = `instagram_media_${Date.now()}`;
+                            if (firstMedia.type === 'video') filename += '.mp4';
+                            else if (firstMedia.type === 'image') filename += '.jpg';
+                        }
+                        
+                        a.download = filename;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+
+                        if(downloadInfoDiv){
+                            if (firstMedia.type === 'image') {
+                                downloadInfoDiv.innerHTML = `<img src="${firstMedia.url}" alt="Downloaded Image Preview">`;
+                            } else if (firstMedia.type === 'video') {
+                                downloadInfoDiv.innerHTML = `<video controls src="${firstMedia.url}" width="100%"></video>`;
+                            }
+                            downloadInfoDiv.innerHTML += `<p><a href="${firstMedia.url}" target="_blank" download="${filename}" class="download-button">Download Link (if auto-download failed)</a></p>`;
+                        }
+                        if(statusDiv) {
+                            statusDiv.textContent = `"${filename}" download started. Check your downloads.`;
+                            statusDiv.className = 'success';
+                        }
+                    } else {
+                        if(statusDiv) {
+                            statusDiv.textContent = data.message || 'Could not find media for this link.';
+                            statusDiv.className = 'error';
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error in Download Media click handler:', error);
+                    if(statusDiv) {
+                        statusDiv.textContent = `An error occurred: ${error.message}`;
+                        statusDiv.className = 'error';
+                    }
+                } finally {
+                    if(loader) loader.style.display = 'none';
+                    nextButton.disabled = false;
+                }
+            });
+        }
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('/sw.js')
-                    .then(registration => console.log('ServiceWorker registration successful with scope: ', registration.scope))
+                    .then(registration => console.log('ServiceWorker registration successful, scope: ', registration.scope))
                     .catch(err => console.log('ServiceWorker registration failed: ', err));
             });
+        } else {
+            console.log('Service Worker not supported.');
         }
     </script>
 </body>
